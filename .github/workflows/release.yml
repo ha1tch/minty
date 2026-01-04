@@ -1,0 +1,296 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  GO_VERSION: '1.22'
+
+jobs:
+  build-assettrack:
+    name: Build AssetTrack
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux
+          - goos: linux
+            goarch: amd64
+            suffix: ''
+          - goos: linux
+            goarch: arm64
+            suffix: ''
+          - goos: linux
+            goarch: '386'
+            suffix: ''
+          - goos: linux
+            goarch: arm
+            goarm: '7'
+            suffix: ''
+          # macOS
+          - goos: darwin
+            goarch: amd64
+            suffix: ''
+          - goos: darwin
+            goarch: arm64
+            suffix: ''
+          # Windows
+          - goos: windows
+            goarch: amd64
+            suffix: '.exe'
+          - goos: windows
+            goarch: '386'
+            suffix: '.exe'
+          - goos: windows
+            goarch: arm64
+            suffix: '.exe'
+          # FreeBSD
+          - goos: freebsd
+            goarch: amd64
+            suffix: ''
+          - goos: freebsd
+            goarch: arm64
+            suffix: ''
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: examples/go.sum
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build AssetTrack
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: '0'
+        run: |
+          cd examples
+          mkdir -p dist
+          BINARY_NAME="assettrack-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
+          go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.version }}" \
+            -o "dist/${BINARY_NAME}" \
+            ./cmd/assettrack
+          
+          # Create checksum
+          cd dist
+          sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: assettrack-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: examples/dist/*
+          retention-days: 1
+
+  build-insurequote:
+    name: Build InsureQuote
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux
+          - goos: linux
+            goarch: amd64
+            suffix: ''
+          - goos: linux
+            goarch: arm64
+            suffix: ''
+          - goos: linux
+            goarch: '386'
+            suffix: ''
+          - goos: linux
+            goarch: arm
+            goarm: '7'
+            suffix: ''
+          # macOS
+          - goos: darwin
+            goarch: amd64
+            suffix: ''
+          - goos: darwin
+            goarch: arm64
+            suffix: ''
+          # Windows
+          - goos: windows
+            goarch: amd64
+            suffix: '.exe'
+          - goos: windows
+            goarch: '386'
+            suffix: '.exe'
+          - goos: windows
+            goarch: arm64
+            suffix: '.exe'
+          # FreeBSD
+          - goos: freebsd
+            goarch: amd64
+            suffix: ''
+          - goos: freebsd
+            goarch: arm64
+            suffix: ''
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: examples/insurance-quote/go.sum
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build InsureQuote
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+          CGO_ENABLED: '0'
+        run: |
+          cd examples/insurance-quote
+          mkdir -p dist
+          BINARY_NAME="insurequote-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}"
+          go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.version }}" \
+            -o "dist/${BINARY_NAME}" \
+            ./cmd/insurequote
+          
+          # Create checksum
+          cd dist
+          sha256sum "${BINARY_NAME}" > "${BINARY_NAME}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: insurequote-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: examples/insurance-quote/dist/*
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: [build-assettrack, build-insurequote]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          
+          # Flatten artifacts into release directory
+          find artifacts -type f -name "assettrack-*" -exec mv {} release/ \;
+          find artifacts -type f -name "insurequote-*" -exec mv {} release/ \;
+          
+          # Create archive bundles for convenience
+          cd release
+          
+          # Create combined checksums file
+          cat *.sha256 > checksums.txt
+          
+          # List all files
+          echo "Release assets:"
+          ls -la
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: minty ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          generate_release_notes: true
+          files: |
+            release/*
+          body: |
+            ## minty ${{ steps.version.outputs.version }}
+            
+            ### Example Applications
+            
+            This release includes pre-built binaries for two example applications:
+            
+            #### AssetTrack
+            A comprehensive asset management dashboard demonstrating minty's capabilities.
+            
+            #### InsureQuote  
+            An insurance quote application showcasing mintydyn dynamic components.
+            
+            ### Downloads
+            
+            | Platform | AssetTrack | InsureQuote |
+            |----------|------------|-------------|
+            | Linux (amd64) | `assettrack-linux-amd64` | `insurequote-linux-amd64` |
+            | Linux (arm64) | `assettrack-linux-arm64` | `insurequote-linux-arm64` |
+            | Linux (386) | `assettrack-linux-386` | `insurequote-linux-386` |
+            | Linux (arm) | `assettrack-linux-arm` | `insurequote-linux-arm` |
+            | macOS (Intel) | `assettrack-darwin-amd64` | `insurequote-darwin-amd64` |
+            | macOS (Apple Silicon) | `assettrack-darwin-arm64` | `insurequote-darwin-arm64` |
+            | Windows (64-bit) | `assettrack-windows-amd64.exe` | `insurequote-windows-amd64.exe` |
+            | Windows (32-bit) | `assettrack-windows-386.exe` | `insurequote-windows-386.exe` |
+            | Windows (ARM64) | `assettrack-windows-arm64.exe` | `insurequote-windows-arm64.exe` |
+            | FreeBSD (amd64) | `assettrack-freebsd-amd64` | `insurequote-freebsd-amd64` |
+            | FreeBSD (arm64) | `assettrack-freebsd-arm64` | `insurequote-freebsd-arm64` |
+            
+            ### Verification
+            
+            SHA256 checksums are provided for each binary. Download `checksums.txt` or the individual `.sha256` files.
+            
+            ```bash
+            # Verify a download
+            sha256sum -c assettrack-linux-amd64.sha256
+            ```
+            
+            ### Running
+            
+            ```bash
+            # Make executable (Linux/macOS/FreeBSD)
+            chmod +x assettrack-linux-amd64
+            
+            # Run
+            ./assettrack-linux-amd64
+            # Then open http://localhost:8080
+            ```
