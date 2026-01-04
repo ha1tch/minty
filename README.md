@@ -1,6 +1,6 @@
 # Minty
 
-**Minty is an ultra-concise, type-safe HTML generation library for Go web applications. It provides a fluent API for creating HTML elements without traditional templates, offering compile-time safety and excellent IDE support.**
+**Minty is a fresh, ultra-concise, type-safe HTML generation library for Go web applications. It provides a fluent API for creating HTML components without traditional templates, offering compile-time safety and excellent IDE support.**
 
 ## STATUS: PRELIMINAR, VERY BETA
 
@@ -10,6 +10,7 @@
 
 - **Type-safe HTML generation** - Catch errors at compile time, not runtime
 - **Fluent builder pattern** - Intuitive, chainable API
+- **Dynamic client-side components** - Without writing any Javascript by hand
 - **HTMX integration** - First-class support for HTMX attributes and patterns
 - **Theme system** - Pluggable themes (Bootstrap, Tailwind, Bulma, Material Design)
 - **Domain libraries** - Pre-built components for common business domains
