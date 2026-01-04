@@ -1,5 +1,7 @@
-module github.com/ha1tch/minty/examples/insurance-quote
+module github.com/ha1tch/insurance-quote
 
 go 1.22.2
 
 require github.com/ha1tch/minty v0.0.0
+
+replace github.com/ha1tch/minty => ./minty

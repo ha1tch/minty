@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/ha1tch/minty/examples/insurance-quote/internal/store"
-	"github.com/ha1tch/minty/examples/insurance-quote/internal/ui"
+	"github.com/ha1tch/insurance-quote/internal/store"
+	"github.com/ha1tch/insurance-quote/internal/ui"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 	// Routes
 	http.HandleFunc("/", h.Dashboard)
 	http.HandleFunc("/quote", h.QuoteWizard)
-	http.HandleFunc("/quotes", h.Dashboard) // Placeholder
+	http.HandleFunc("/quotes", h.MyQuotes)
 	http.HandleFunc("/claims", h.Claims)
 	http.HandleFunc("/compare", h.ComparePlans)
 	http.HandleFunc("/settings", h.Settings)

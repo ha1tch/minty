@@ -9,8 +9,8 @@ import (
 
 	mi "github.com/ha1tch/minty"
 	mdy "github.com/ha1tch/minty/mintydyn"
-	"github.com/ha1tch/minty/examples/insurance-quote/internal/models"
-	"github.com/ha1tch/minty/examples/insurance-quote/internal/store"
+	"github.com/ha1tch/insurance-quote/internal/models"
+	"github.com/ha1tch/insurance-quote/internal/store"
 )
 
 // Handler handles HTTP requests.
@@ -25,8 +25,49 @@ func NewHandler(store *store.Store, logger *slog.Logger) *Handler {
 	return &Handler{
 		store:  store,
 		logger: logger,
-		theme:  mdy.NewTailwindDynamicTheme(),
+		theme:  mdy.NewTailwindDarkTheme(),
 	}
+}
+
+// formatMoney formats a float64 as a dollar amount with thousand separators.
+func formatMoney(amount float64) string {
+	// Handle whole numbers for cleaner display
+	intPart := int64(amount)
+	
+	// Format with thousand separators
+	str := fmt.Sprintf("%d", intPart)
+	if intPart < 0 {
+		str = str[1:] // Remove negative sign temporarily
+	}
+	
+	// Insert commas
+	n := len(str)
+	if n <= 3 {
+		if intPart < 0 {
+			return "-$" + str
+		}
+		return "$" + str
+	}
+	
+	var result strings.Builder
+	offset := n % 3
+	if offset > 0 {
+		result.WriteString(str[:offset])
+		if n > 3 {
+			result.WriteString(",")
+		}
+	}
+	for i := offset; i < n; i += 3 {
+		result.WriteString(str[i : i+3])
+		if i+3 < n {
+			result.WriteString(",")
+		}
+	}
+	
+	if intPart < 0 {
+		return "-$" + result.String()
+	}
+	return "$" + result.String()
 }
 
 // =============================================================================
@@ -35,6 +76,7 @@ func NewHandler(store *store.Store, logger *slog.Logger) *Handler {
 
 var darkMode = mi.DarkModeTailwind(
 	mi.DarkModeMinify(),
+	mi.DarkModeSVGIcons(),
 )
 
 // =============================================================================
@@ -550,6 +592,24 @@ func (h *Handler) formSelect(b *mi.Builder, label, name string, options []string
 func (h *Handler) Claims(w http.ResponseWriter, r *http.Request) {
 	page := h.pageLayout("claims", "Claims", "View and manage your insurance claims", func(b *mi.Builder) mi.Node {
 		// PATTERN: ClientFilterable - JSON data with client-side filtering
+		// Define the item template for rendering claims as cards
+		// Status classes: open, in-progress, approved, denied, closed
+		claimTemplate := `<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-3 hover:shadow-md transition-shadow bg-white dark:bg-gray-800">
+			<div class="flex items-center justify-between mb-2">
+				<span class="font-semibold text-gray-900 dark:text-white">${customerName}</span>
+				<span class="status-pill status-${status}">${status}</span>
+			</div>
+			<p class="text-sm text-gray-600 dark:text-gray-400 mb-2">${description}</p>
+			<div class="flex items-center justify-between text-sm">
+				<span class="text-gray-500 dark:text-gray-400">Policy: ${policyNumber}</span>
+				<span class="text-gray-500 dark:text-gray-400">Filed: ${filed}</span>
+			</div>
+			<div class="flex items-center justify-between mt-2">
+				<span class="text-xs uppercase text-gray-400 dark:text-gray-500">${type}</span>
+				<span class="font-semibold text-gray-900 dark:text-white">$${amount}</span>
+			</div>
+		</div>`
+
 		claimsFilter := mdy.Dyn("claims-filter").
 			Data(mdy.FilterableDataset{
 				Items: h.store.ClaimsAsMapSlice(),
@@ -564,6 +624,7 @@ func (h *Handler) Claims(w http.ResponseWriter, r *http.Request) {
 					EnableSearch:     true,
 					EnablePagination: true,
 					ItemsPerPage:     5,
+					ItemTemplate:     claimTemplate,
 				},
 			}).
 			Theme(h.theme).
@@ -571,16 +632,164 @@ func (h *Handler) Claims(w http.ResponseWriter, r *http.Request) {
 			Build()
 
 		return b.Div(
+			// Status pill CSS + view toggle script
+			mi.Raw(`<style>
+				.status-pill { padding: 0.25rem 0.625rem; font-size: 0.75rem; font-weight: 500; border-radius: 9999px; text-transform: capitalize; }
+				.status-open { background-color: #fef3c7; color: #92400e; }
+				.dark .status-open { background-color: rgba(146, 64, 14, 0.4); color: #fcd34d; }
+				.status-in-progress { background-color: #dbeafe; color: #1e40af; }
+				.dark .status-in-progress { background-color: rgba(30, 64, 175, 0.4); color: #93c5fd; }
+				.status-approved { background-color: #d1fae5; color: #065f46; }
+				.dark .status-approved { background-color: rgba(6, 95, 70, 0.4); color: #6ee7b7; }
+				.status-denied { background-color: #fee2e2; color: #991b1b; }
+				.dark .status-denied { background-color: rgba(153, 27, 27, 0.4); color: #fca5a5; }
+				.status-closed { background-color: #f3f4f6; color: #374151; }
+				.dark .status-closed { background-color: #374151; color: #d1d5db; }
+				.json-view { font-family: monospace; font-size: 0.75rem; background: #f3f4f6; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 0.5rem; white-space: pre-wrap; word-break: break-all; }
+				.dark .json-view { background: #1f2937; color: #d1d5db; }
+			</style>
+			<script>
+				var jsonIcon = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg> JSON';
+				var cardsIcon = '<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z"/></svg> Cards';
+				function toggleClaimsView() {
+					var container = document.getElementById('claims-filter');
+					var btn = document.getElementById('view-toggle-btn');
+					var isJson = container.dataset.viewMode === 'json';
+					container.dataset.viewMode = isJson ? 'cards' : 'json';
+					btn.innerHTML = isJson ? jsonIcon : cardsIcon;
+					if (window.DynComponent_claims_filter && window.DynComponent_claims_filter.managers.data) {
+						window.DynComponent_claims_filter.managers.data.renderResults();
+					}
+				}
+			</script>`),
 			// Toolbar
 			b.Div(mi.Class("flex items-center justify-between mb-4"),
 				b.A(mi.Href("/claims/new"), mi.Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"),
 					Icon("plus", "w-4 h-4"), "File New Claim",
+				),
+				// View toggle button
+				b.Button(
+					mi.ID("view-toggle-btn"),
+					mi.Type("button"),
+					mi.Class("inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"),
+					mi.Attr("onclick", "toggleClaimsView()"),
+					Icon("code-bracket", "w-4 h-4"), "JSON",
 				),
 			),
 			// Filter component (generates controls and filters JSON data client-side)
 			b.Div(mi.Class("bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6"),
 				claimsFilter(b),
 			),
+		)
+	})
+	h.render(w, page)
+}
+
+// =============================================================================
+// MY QUOTES - Shows saved quotes
+// =============================================================================
+
+func (h *Handler) MyQuotes(w http.ResponseWriter, r *http.Request) {
+	page := h.pageLayout("quotes", "My Quotes", "View your saved insurance quotes", func(b *mi.Builder) mi.Node {
+		// Sample quotes data
+		quotes := []map[string]interface{}{
+			{"id": "Q-2024-001", "type": "auto", "coverage": "Premium", "premium": "$125/mo", "status": "active", "expires": "2025-01-15", "vehicle": "2022 Toyota Camry"},
+			{"id": "Q-2024-002", "type": "home", "coverage": "Standard", "premium": "$89/mo", "status": "pending", "expires": "2025-01-20", "property": "123 Main St"},
+			{"id": "Q-2024-003", "type": "life", "coverage": "Basic", "premium": "$45/mo", "status": "expired", "expires": "2024-12-01", "beneficiary": "Jane Doe"},
+			{"id": "Q-2024-004", "type": "auto", "coverage": "Basic", "premium": "$78/mo", "status": "draft", "expires": "2025-02-01", "vehicle": "2020 Honda Civic"},
+		}
+
+		// Build quote cards
+		var cards []interface{}
+		for _, q := range quotes {
+			typeIcon := map[string]string{
+				"auto": "truck",
+				"home": "home-modern",
+				"life": "heart",
+				"business": "building-office",
+			}[q["type"].(string)]
+
+			statusClass := map[string]string{
+				"active":  "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+				"pending": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300",
+				"expired": "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+				"draft":   "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
+			}[q["status"].(string)]
+
+			// Get detail based on type
+			detail := ""
+			switch q["type"].(string) {
+			case "auto":
+				detail = q["vehicle"].(string)
+			case "home":
+				detail = q["property"].(string)
+			case "life":
+				detail = "Beneficiary: " + q["beneficiary"].(string)
+			}
+
+			card := b.Div(mi.Class("bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-lg transition-shadow"),
+				// Header
+				b.Div(mi.Class("flex items-center justify-between mb-4"),
+					b.Div(mi.Class("flex items-center gap-3"),
+						b.Div(mi.Class("p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg"),
+							Icon(typeIcon, "w-5 h-5 text-blue-600 dark:text-blue-400"),
+						),
+						b.Div(
+							b.Div(mi.Class("font-semibold text-gray-900 dark:text-white"), q["id"].(string)),
+							b.Div(mi.Class("text-sm text-gray-500 dark:text-gray-400"), strings.Title(q["type"].(string))+" Insurance"),
+						),
+					),
+					b.Span(mi.Class("px-2.5 py-1 text-xs font-medium rounded-full "+statusClass),
+						strings.Title(q["status"].(string)),
+					),
+				),
+				// Details
+				b.Div(mi.Class("space-y-2 mb-4"),
+					b.Div(mi.Class("flex justify-between text-sm"),
+						b.Span(mi.Class("text-gray-500 dark:text-gray-400"), "Coverage"),
+						b.Span(mi.Class("font-medium text-gray-900 dark:text-white"), q["coverage"].(string)),
+					),
+					b.Div(mi.Class("flex justify-between text-sm"),
+						b.Span(mi.Class("text-gray-500 dark:text-gray-400"), "Premium"),
+						b.Span(mi.Class("font-medium text-gray-900 dark:text-white"), q["premium"].(string)),
+					),
+					b.Div(mi.Class("flex justify-between text-sm"),
+						b.Span(mi.Class("text-gray-500 dark:text-gray-400"), "Expires"),
+						b.Span(mi.Class("font-medium text-gray-900 dark:text-white"), q["expires"].(string)),
+					),
+				),
+				// Detail line
+				b.Div(mi.Class("text-sm text-gray-600 dark:text-gray-400 pt-3 border-t border-gray-100 dark:border-gray-700"),
+					detail,
+				),
+				// Actions
+				b.Div(mi.Class("flex gap-2 mt-4"),
+					b.Button(mi.Class("flex-1 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50"),
+						"View Details",
+					),
+					b.Button(mi.Class("px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600"),
+						Icon("printer", "w-4 h-4"),
+					),
+				),
+			)
+			cards = append(cards, card)
+		}
+
+		gridArgs := []interface{}{mi.Class("grid grid-cols-1 md:grid-cols-2 gap-4")}
+		gridArgs = append(gridArgs, cards...)
+
+		return b.Div(
+			// Toolbar
+			b.Div(mi.Class("flex items-center justify-between mb-6"),
+				b.Div(mi.Class("text-sm text-gray-500 dark:text-gray-400"),
+					"Showing 4 quotes",
+				),
+				b.A(mi.Href("/quote"), mi.Class("inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"),
+					Icon("plus", "w-4 h-4"), "New Quote",
+				),
+			),
+			// Quote cards grid
+			b.Div(gridArgs...),
 		)
 	})
 	h.render(w, page)
@@ -675,8 +884,8 @@ func (h *Handler) planCard(b *mi.Builder, plan models.Plan) mi.Node {
 			b.Span(mi.Class("text-gray-500 dark:text-gray-400"), "/month"),
 		),
 		b.Div(mi.Class("mb-4 text-sm text-gray-600 dark:text-gray-400"),
-			b.P("Coverage: ", b.Span(mi.Class("font-medium"), fmt.Sprintf("$%,.0f", plan.Coverage))),
-			b.P("Deductible: ", b.Span(mi.Class("font-medium"), fmt.Sprintf("$%,.0f", plan.Deductible))),
+			b.P("Coverage: ", b.Span(mi.Class("font-medium"), formatMoney(plan.Coverage))),
+			b.P("Deductible: ", b.Span(mi.Class("font-medium"), formatMoney(plan.Deductible))),
 		),
 		b.Ul(featureArgs...),
 		b.A(mi.Href("/quote?plan="+plan.ID), mi.Class("block w-full text-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"),

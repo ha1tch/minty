@@ -3,7 +3,7 @@ package store
 import (
 	"time"
 
-	"github.com/ha1tch/minty/examples/insurance-quote/internal/models"
+	"github.com/ha1tch/insurance-quote/internal/models"
 )
 
 // Store provides in-memory data storage.
