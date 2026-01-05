@@ -72,11 +72,13 @@ jobs:
       - name: Build AssetTrack
         run: |
           cd examples
+          go mod tidy
           go build ./cmd/assettrack
 
       - name: Build InsureQuote
         run: |
           cd examples/insurance-quote
+          go mod tidy
           go build ./cmd/insurequote
 
   vet:
