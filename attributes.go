@@ -513,6 +513,13 @@ func HtmxTrigger(trigger string) Attribute {
 	return StringAttribute{Name: "hx-trigger", Value: trigger}
 }
 
+// HtmxOn creates an hx-on:* attribute to specify event handlers. The hx-on*
+// attributes allow you to embed scripts inline to respond to events directly on
+// an element; similar to the onevent properties found in HTML, such as onClick.
+func HtmxOn(event, script string) Attribute {
+	return StringAttribute{Name: "hx-on:" + event, Value: script}
+}
+
 // HTMX Indicators and Feedback
 
 // HtmxIndicator creates an hx-indicator attribute to show loading indicators.
@@ -664,6 +671,9 @@ func HxSwap(strategy string) Attribute { return HtmxSwap(strategy) }
 
 // HxTrigger is an alias for HtmxTrigger
 func HxTrigger(trigger string) Attribute { return HtmxTrigger(trigger) }
+
+// HxOn is an alias for HtmxOn
+func HxOn(event, script string) Attribute { return HtmxOn(event, script) }
 
 // HxIndicator is an alias for HtmxIndicator
 func HxIndicator(selector string) Attribute { return HtmxIndicator(selector) }
