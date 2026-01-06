@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"slices"
 	"strings"
 )
 
@@ -32,9 +33,17 @@ func (e *Element) Render(w io.Writer) error {
 		return err
 	}
 
+	// Sort attributes for consistent output
+	keys := make([]string, 0, len(e.Attributes))
+	for key := range e.Attributes {
+		keys = append(keys, key)
+	}
+
+	slices.Sort(keys)
+
 	// Write attributes
-	for key, value := range e.Attributes {
-		if _, err := fmt.Fprintf(w, ` %s="%s"`, key, html.EscapeString(value)); err != nil {
+	for _, key := range keys {
+		if _, err := fmt.Fprintf(w, ` %s="%s"`, key, html.EscapeString(e.Attributes[key])); err != nil {
 			return err
 		}
 	}
@@ -183,7 +192,7 @@ func Document(title string, headNodes []Node, body Node) H {
 		for _, node := range headNodes {
 			headChildren = append(headChildren, node)
 		}
-		
+
 		return NewFragment(
 			Raw("<!DOCTYPE html>"),
 			b.Html(Lang("en"),
@@ -193,5 +202,3 @@ func Document(title string, headNodes []Node, body Node) H {
 		)
 	}
 }
-
-
