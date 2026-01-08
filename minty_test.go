@@ -74,6 +74,27 @@ func TestAttributes(t *testing.T) {
 	}
 }
 
+// Logic test - If works
+func TestIf(t *testing.T) {
+	template := func(b *Builder) Node {
+		return b.Div(
+			b.If(true, b.P("Condition is true")),
+			b.If(false, b.P("Condition is false")),
+		)
+	}
+
+	var buf bytes.Buffer
+	Render(template, &buf)
+	html := buf.String()
+
+	if !strings.Contains(html, "Condition is true") {
+		t.Error("If(true) did not render content")
+	}
+	if strings.Contains(html, "Condition is false") {
+		t.Error("If(false) should not render content")
+	}
+}
+
 // Builder regression test - global instance works
 func TestGlobalBuilder(t *testing.T) {
 	template := func(b *Builder) Node {

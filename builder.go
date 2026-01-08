@@ -47,6 +47,24 @@ func (b *Builder) createElement(tag string, selfClosing bool, args ...interface{
 	return element
 }
 
+// Logic for creating HTML elements
+
+// If returns the Node if the condition is true, otherwise returns nil.
+func (b *Builder) If(condition bool, Node Node) Node {
+	if condition {
+		return Node
+	}
+	return nil
+}
+
+// IfElse returns the trueNode if condition is true, otherwise returns falseNode.
+func (b *Builder) IfElse(condition bool, trueNode, falseNode Node) Node {
+	if condition {
+		return trueNode
+	}
+	return falseNode
+}
+
 // Document structure elements
 
 // Html creates an <html> element.
