@@ -87,11 +87,11 @@ func TestIf(t *testing.T) {
 	Render(template, &buf)
 	html := buf.String()
 
-	if !strings.Contains(html, "Condition is true") {
-		t.Error("If(true) did not render content")
+	if !strings.Contains(html, "<div><p>Condition is true</p></div>") {
+		t.Errorf("If(true) should render content, got: %s", html)
 	}
-	if strings.Contains(html, "Condition is false") {
-		t.Error("If(false) should not render content")
+	if strings.Contains(html, "<div><p>Condition is false</p></div>") {
+		t.Errorf("If(false) should not render content, got: %s", html)
 	}
 }
 

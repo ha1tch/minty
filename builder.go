@@ -18,6 +18,9 @@ func (b *Builder) createElement(tag string, selfClosing bool, args ...interface{
 	}
 
 	for _, arg := range args {
+		if arg == nil {
+			continue
+		}
 		switch v := arg.(type) {
 		case Attribute:
 			v.Apply(element)
