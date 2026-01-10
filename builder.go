@@ -22,6 +22,8 @@ func (b *Builder) createElement(tag string, selfClosing bool, args ...interface{
 			continue
 		}
 		switch v := arg.(type) {
+		case H:
+			panic("cannot use H type directly in element creation; call with (b *Builder)")
 		case Attribute:
 			v.Apply(element)
 		case Node:
