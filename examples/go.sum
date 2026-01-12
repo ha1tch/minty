@@ -1,2 +1,4 @@
 github.com/go-chi/chi/v5 v5.0.12 h1:9euLV5sTrTNTRUU9POmDUvfxyj6LAABLUcEWO+JJb4s=
 github.com/go-chi/chi/v5 v5.0.12/go.mod h1:DslCQbL2OYiznFReuXYUmQ2hGd1aDpCnlMNITLSKoi8=
+github.com/ha1tch/minty v0.1.0 h1:T5uVKjmLXc/tLhe0vKzi/0IMYXVF5Ut21FrOgKCTlOU=
+github.com/ha1tch/minty v0.1.0/go.mod h1:nOVSQmqT1VAjBiNIuN81elt4mM6auf8DXmpgcZHZhv8=
