@@ -18,9 +18,21 @@ func (b *Builder) createElement(tag string, selfClosing bool, args ...interface{
 	}
 
 	for _, arg := range args {
+		for range 100 { // break out of infinite loops
+			if eval, ok := arg.(Evaluation); ok {
+				if eval.condition {
+					arg = eval.trueValue
+				} else {
+					arg = eval.falseValue
+				}
+				continue
+			}
+		}
+
 		if arg == nil {
 			continue
 		}
+
 		switch v := arg.(type) {
 		case Attribute:
 			v.Apply(element)
@@ -51,21 +63,27 @@ func (b *Builder) createElement(tag string, selfClosing bool, args ...interface{
 }
 
 // Logic for creating HTML elements
+type Evaluation struct {
+	condition  bool
+	trueValue  any
+	falseValue any
+}
 
 // If returns the Node if the condition is true, otherwise returns nil.
-func (b *Builder) If(condition bool, Node Node) Node {
-	if condition {
-		return Node
+func (b *Builder) If(condition bool, item any) Evaluation {
+	return Evaluation{
+		condition: condition,
+		trueValue: item,
 	}
-	return nil
 }
 
 // IfElse returns the trueNode if condition is true, otherwise returns falseNode.
-func (b *Builder) IfElse(condition bool, trueNode, falseNode Node) Node {
-	if condition {
-		return trueNode
+func (b *Builder) IfElse(condition bool, trueNode, falseNode any) Evaluation {
+	return Evaluation{
+		condition:  condition,
+		trueValue:  trueNode,
+		falseValue: falseNode,
 	}
-	return falseNode
 }
 
 // Document structure elements
