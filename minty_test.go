@@ -69,6 +69,9 @@ func TestAttributes(t *testing.T) {
 	if !strings.Contains(html, `id="test-id"`) {
 		t.Error("ID attribute not applied")
 	}
+	if !strings.Contains(html, `class="test-class" id="test-id"`) {
+		t.Error("Attributes not combined correctly")
+	}
 	if !strings.Contains(html, "content") {
 		t.Error("Text content not rendered")
 	}
@@ -277,7 +280,7 @@ func TestFormElements(t *testing.T) {
 	if !strings.Contains(html, `method="POST"`) {
 		t.Error("Form method attribute missing")
 	}
-	
+
 	// Check input attributes
 	if !strings.Contains(html, `type="email"`) {
 		t.Error("Input type attribute missing")
@@ -288,7 +291,7 @@ func TestFormElements(t *testing.T) {
 	if !strings.Contains(html, `required="required"`) {
 		t.Error("Required boolean attribute missing")
 	}
-	
+
 	// Check label
 	if !strings.Contains(html, `for="email"`) {
 		t.Error("Label for attribute missing")
@@ -299,7 +302,7 @@ func TestTextareaAndSelect(t *testing.T) {
 	template := func(b *Builder) Node {
 		return b.Div(
 			b.Textarea(Name("message"), Rows(5), Cols(40), "Default text"),
-			b.Select(Name("country"), 
+			b.Select(Name("country"),
 				b.Option(Value("us"), "United States"),
 				b.Option(Value("ca"), Selected(), "Canada"),
 			),
@@ -307,7 +310,7 @@ func TestTextareaAndSelect(t *testing.T) {
 	}
 
 	html := RenderToString(template)
-	
+
 	if !strings.Contains(html, `<textarea`) {
 		t.Error("Textarea element missing")
 	}
@@ -318,7 +321,7 @@ func TestTextareaAndSelect(t *testing.T) {
 		t.Error("Textarea content missing")
 	}
 	if !strings.Contains(html, `<select`) {
-		t.Error("Select element missing")  
+		t.Error("Select element missing")
 	}
 	if !strings.Contains(html, `selected="selected"`) {
 		t.Error("Selected option missing")
@@ -331,10 +334,10 @@ func TestBasicLayout(t *testing.T) {
 	content := func(b *Builder) Node {
 		return b.H1("Test Content")
 	}
-	
+
 	template := Layout("Test Page", content)
 	html := RenderToString(template)
-	
+
 	if !strings.Contains(html, "<html>") {
 		t.Error("HTML wrapper missing from layout")
 	}
@@ -354,10 +357,10 @@ func TestNavigation(t *testing.T) {
 		{URL: "/", Text: "Home"},
 		{URL: "/about", Text: "About"},
 	}
-	
+
 	template := Navigation(navLinks)
 	html := RenderToString(template)
-	
+
 	if !strings.Contains(html, `href="/"`) {
 		t.Error("Home link missing")
 	}
@@ -385,7 +388,7 @@ func TestValidation(t *testing.T) {
 	if err := ValidateRequired("valid", "Name"); err != nil {
 		t.Error("Required validation should pass for non-empty string")
 	}
-	
+
 	// Test email validation
 	if err := ValidateEmail("invalid", "Email"); err == nil {
 		t.Error("Email validation should fail for invalid email")
@@ -400,10 +403,10 @@ func TestValidation(t *testing.T) {
 
 func TestValidationResult(t *testing.T) {
 	result := &ValidationResult{IsValid: true}
-	
+
 	result.AddError("email", "Invalid email")
 	result.AddError("name", "Required field")
-	
+
 	if result.IsValid {
 		t.Error("ValidationResult should be invalid after adding errors")
 	}
@@ -430,27 +433,27 @@ func TestControlFlow(t *testing.T) {
 	falseTemplate := func(b *Builder) Node {
 		return b.P("False content")
 	}
-	
+
 	// Test If
 	ifTrue := If(true, trueTemplate)
 	html := RenderToString(ifTrue)
 	if !strings.Contains(html, "True content") {
 		t.Error("If(true) should render content")
 	}
-	
+
 	ifFalse := If(false, trueTemplate)
 	html = RenderToString(ifFalse)
 	if strings.Contains(html, "True content") {
 		t.Error("If(false) should not render content")
 	}
-	
+
 	// Test IfElse
 	ifElseTrue := IfElse(true, trueTemplate, falseTemplate)
 	html = RenderToString(ifElseTrue)
 	if !strings.Contains(html, "True content") {
 		t.Error("IfElse(true) should render true template")
 	}
-	
+
 	ifElseFalse := IfElse(false, trueTemplate, falseTemplate)
 	html = RenderToString(ifElseFalse)
 	if !strings.Contains(html, "False content") {
@@ -506,7 +509,7 @@ func TestHTMXHelperComponents(t *testing.T) {
 	// Test LiveSearch
 	liveSearch := LiveSearch("/search", "#results", "Search...")
 	html := RenderToString(liveSearch)
-	
+
 	if !strings.Contains(html, `hx-get="/search"`) {
 		t.Error("LiveSearch should include hx-get")
 	}
@@ -518,10 +521,10 @@ func TestHTMXHelperComponents(t *testing.T) {
 	}
 
 	// Test HTMXForm
-	htmxForm := HTMXForm("POST", "/submit", "#target", 
+	htmxForm := HTMXForm("POST", "/submit", "#target",
 		B.Input(Type("text"), Name("data")))
 	html = RenderToString(htmxForm)
-	
+
 	if !strings.Contains(html, `method="POST"`) {
 		t.Error("HTMXForm should include method")
 	}
@@ -536,17 +539,17 @@ func TestHTMXHelperComponents(t *testing.T) {
 func TestHTMXLoadingIndicators(t *testing.T) {
 	indicator := HTMXLoadingIndicator("Loading...")
 	html := RenderToString(indicator)
-	
+
 	if !strings.Contains(html, `class="htmx-indicator"`) {
 		t.Error("Loading indicator should have htmx-indicator class")
 	}
 	if !strings.Contains(html, "Loading...") {
 		t.Error("Loading indicator should contain text")
 	}
-	
+
 	spinner := HTMXLoadingSpinner()
 	html = RenderToString(spinner)
-	
+
 	if !strings.Contains(html, `class="htmx-indicator spinner"`) {
 		t.Error("Loading spinner should have correct classes")
 	}
@@ -557,7 +560,7 @@ func TestHTMXLoadingIndicators(t *testing.T) {
 
 func TestHTMXSwapStrategies(t *testing.T) {
 	strategies := HTMXSwapStrategies
-	
+
 	expected := map[string]string{
 		strategies.InnerHTML:   "innerHTML",
 		strategies.OuterHTML:   "outerHTML",
@@ -568,7 +571,7 @@ func TestHTMXSwapStrategies(t *testing.T) {
 		strategies.Delete:      "delete",
 		strategies.None:        "none",
 	}
-	
+
 	for strategy, expectedValue := range expected {
 		if strategy != expectedValue {
 			t.Errorf("Expected swap strategy %s, got %s", expectedValue, strategy)
@@ -578,7 +581,7 @@ func TestHTMXSwapStrategies(t *testing.T) {
 
 func TestHTMXTriggers(t *testing.T) {
 	triggers := HTMXTriggers
-	
+
 	if triggers.KeyUpDelayed != "keyup changed delay:300ms" {
 		t.Error("KeyUpDelayed trigger should have correct value")
 	}
@@ -593,7 +596,7 @@ func TestHTMXTriggers(t *testing.T) {
 func TestInfiniteScroll(t *testing.T) {
 	infiniteScroll := InfiniteScroll("/api/load-more", "#content")
 	html := RenderToString(infiniteScroll)
-	
+
 	if !strings.Contains(html, `hx-get="/api/load-more"`) {
 		t.Error("InfiniteScroll should include hx-get")
 	}
@@ -612,26 +615,26 @@ func TestInfiniteScroll(t *testing.T) {
 
 func TestEachFunction(t *testing.T) {
 	items := []string{"apple", "banana", "cherry"}
-	
+
 	renderer := func(item string) H {
 		return func(b *Builder) Node {
 			return b.Li(item)
 		}
 	}
-	
+
 	nodes := Each(items, renderer)
-	
+
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 nodes, got %d", len(nodes))
 	}
-	
+
 	// Test with fragment
 	template := func(b *Builder) Node {
 		return b.Ul(NewFragment(Each(items, renderer)...))
 	}
-	
+
 	html := RenderToString(template)
-	
+
 	if !strings.Contains(html, "<li>apple</li>") {
 		t.Error("Each should render first item")
 	}
@@ -645,15 +648,15 @@ func TestEachFunction(t *testing.T) {
 
 func TestEachWithEmptySlice(t *testing.T) {
 	var items []string
-	
+
 	renderer := func(item string) H {
 		return func(b *Builder) Node {
 			return b.Li(item)
 		}
 	}
-	
+
 	nodes := Each(items, renderer)
-	
+
 	if len(nodes) != 0 {
 		t.Error("Each should return empty slice for empty input")
 	}
@@ -661,25 +664,25 @@ func TestEachWithEmptySlice(t *testing.T) {
 
 func TestEachWithIndex(t *testing.T) {
 	items := []string{"first", "second"}
-	
+
 	renderer := func(i int, item string) H {
 		return func(b *Builder) Node {
 			return b.Li(fmt.Sprintf("%d: %s", i, item))
 		}
 	}
-	
+
 	nodes := EachWithIndex(items, renderer)
-	
+
 	if len(nodes) != 2 {
 		t.Errorf("Expected 2 nodes, got %d", len(nodes))
 	}
-	
+
 	template := func(b *Builder) Node {
 		return NewFragment(nodes...)
 	}
-	
+
 	html := RenderToString(template)
-	
+
 	if !strings.Contains(html, "0: first") {
 		t.Error("EachWithIndex should include index in output")
 	}
@@ -693,35 +696,35 @@ func TestFilterFunction(t *testing.T) {
 		Name   string
 		Active bool
 	}
-	
+
 	users := []User{
 		{"Alice", true},
 		{"Bob", false},
 		{"Charlie", true},
 	}
-	
+
 	predicate := func(u User) bool {
 		return u.Active
 	}
-	
+
 	renderer := func(u User) H {
 		return func(b *Builder) Node {
 			return b.P(u.Name)
 		}
 	}
-	
+
 	nodes := Filter(users, predicate, renderer)
-	
+
 	if len(nodes) != 2 {
 		t.Errorf("Expected 2 active users, got %d", len(nodes))
 	}
-	
+
 	template := func(b *Builder) Node {
 		return NewFragment(nodes...)
 	}
-	
+
 	html := RenderToString(template)
-	
+
 	if !strings.Contains(html, "Alice") {
 		t.Error("Filter should include Alice (active)")
 	}
@@ -735,16 +738,16 @@ func TestFilterFunction(t *testing.T) {
 
 func TestMapFunction(t *testing.T) {
 	numbers := []int{1, 2, 3}
-	
+
 	renderer := func(n int) H {
 		return func(b *Builder) Node {
 			return b.Span(fmt.Sprintf("Number: %d", n))
 		}
 	}
-	
+
 	template := Map(numbers, renderer)
 	html := RenderToString(template)
-	
+
 	if !strings.Contains(html, "Number: 1") {
 		t.Error("Map should render first number")
 	}
@@ -762,19 +765,19 @@ func TestRangeFunction(t *testing.T) {
 			return b.Span(fmt.Sprintf("Item %d", i))
 		}
 	}
-	
+
 	nodes := Range(0, 3, renderer)
-	
+
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 nodes, got %d", len(nodes))
 	}
-	
+
 	template := func(b *Builder) Node {
 		return NewFragment(nodes...)
 	}
-	
+
 	html := RenderToString(template)
-	
+
 	if !strings.Contains(html, "Item 0") {
 		t.Error("Range should start from 0")
 	}
@@ -788,29 +791,29 @@ func TestRangeFunction(t *testing.T) {
 
 func TestWhenFunction(t *testing.T) {
 	status := "active"
-	
+
 	cases := []WhenCase[string]{
 		{"active", func(b *Builder) Node { return b.Span("User is active") }},
 		{"inactive", func(b *Builder) Node { return b.Span("User is inactive") }},
 		{"pending", func(b *Builder) Node { return b.Span("User is pending") }},
 	}
-	
+
 	defaultTemplate := func(b *Builder) Node {
 		return b.Span("Unknown status")
 	}
-	
+
 	template := When(status, cases, defaultTemplate)
 	html := RenderToString(template)
-	
+
 	if !strings.Contains(html, "User is active") {
 		t.Error("When should match active status")
 	}
-	
+
 	// Test default case
 	unknownStatus := "deleted"
 	defaultTemplate2 := When(unknownStatus, cases, defaultTemplate)
 	html2 := RenderToString(defaultTemplate2)
-	
+
 	if !strings.Contains(html2, "Unknown status") {
 		t.Error("When should use default template for unmatched value")
 	}
@@ -818,20 +821,20 @@ func TestWhenFunction(t *testing.T) {
 
 func TestJoinFunction(t *testing.T) {
 	items := []string{"apple", "banana", "cherry"}
-	
+
 	renderer := func(item string) H {
 		return func(b *Builder) Node {
 			return b.Span(item)
 		}
 	}
-	
+
 	separator := func(b *Builder) Node {
 		return b.Text(", ")
 	}
-	
+
 	template := Join(items, renderer, separator)
 	html := RenderToString(template)
-	
+
 	expected := "<span>apple</span>, <span>banana</span>, <span>cherry</span>"
 	if html != expected {
 		t.Errorf("Expected %q, got %q", expected, html)
@@ -842,20 +845,20 @@ func TestRepeatFunction(t *testing.T) {
 	template := func(b *Builder) Node {
 		return b.Span("★")
 	}
-	
+
 	nodes := Repeat(3, template)
-	
+
 	if len(nodes) != 3 {
 		t.Errorf("Expected 3 nodes, got %d", len(nodes))
 	}
-	
+
 	fragmentTemplate := func(b *Builder) Node {
 		return NewFragment(nodes...)
 	}
-	
+
 	html := RenderToString(fragmentTemplate)
 	expected := "<span>★</span><span>★</span><span>★</span>"
-	
+
 	if html != expected {
 		t.Errorf("Expected %q, got %q", expected, html)
 	}
