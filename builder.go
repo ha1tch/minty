@@ -2,11 +2,61 @@ package minty
 
 import (
 	"fmt"
+	"runtime/debug"
 	"strconv"
 )
 
 // Builder provides methods for creating HTML elements with the Minty pattern.
-type Builder struct{}
+//
+// Debug, when true, wraps each argument's processing in element
+// construction (createElement) with panic recovery that adds diagnostic
+// context -- which argument (by index and concrete type), which element
+// tag, and a full stack trace captured at the original panic site --
+// before re-panicking with an *ElementConstructionError. It does not
+// change what fails, only how much a failure explains about itself: a
+// panic still stops execution (this is a programming error, not
+// something to silently paper over), but with enough information to find
+// the actual mistake instead of a bare "nil pointer dereference" with no
+// indication of which attribute, on which element, caused it.
+//
+// Off by default (the zero value), since it adds a defer per element
+// construction call -- see BenchmarkCreateElement_Debug vs
+// BenchmarkCreateElement_Fast for the measured cost. Intended for
+// development and test builds, not necessarily production, though the
+// overhead may be acceptable there too depending on render volume --
+// measure for your own workload rather than assuming either way.
+type Builder struct {
+	Debug bool
+}
+
+// ElementConstructionError wraps a panic recovered during element
+// construction (Builder.Debug only) with the context needed to actually
+// find the mistake: which argument, which element, and the original
+// panic's own stack trace, not just its final message.
+type ElementConstructionError struct {
+	Tag      string
+	ArgIndex int
+	ArgType  string
+	Original interface{}
+	Stack    []byte
+}
+
+func (e *ElementConstructionError) Error() string {
+	return fmt.Sprintf(
+		"minty: panic while processing argument %d (%s) for <%s>: %v\n\nstack at panic:\n%s",
+		e.ArgIndex, e.ArgType, e.Tag, e.Original, e.Stack,
+	)
+}
+
+// Unwrap supports errors.Is/errors.As when the original panic value was
+// itself an error (e.g. a panic(fmt.Errorf(...)), or many of the runtime
+// package's own panic values, which implement error).
+func (e *ElementConstructionError) Unwrap() error {
+	if err, ok := e.Original.(error); ok {
+		return err
+	}
+	return nil
+}
 
 // createElement creates an element with the given tag and processes mixed arguments.
 func (b *Builder) createElement(tag string, selfClosing bool, args ...interface{}) Node {
@@ -17,34 +67,186 @@ func (b *Builder) createElement(tag string, selfClosing bool, args ...interface{
 		Children:    []Node{},
 	}
 
-	for _, arg := range args {
-		switch v := arg.(type) {
-		case Attribute:
-			v.Apply(element)
-		case Node:
-			if !selfClosing {
-				element.Children = append(element.Children, v)
-			}
-		case string:
-			if !selfClosing {
-				element.Children = append(element.Children, &TextNode{Content: v})
-			}
-		case int:
-			if !selfClosing {
-				element.Children = append(element.Children, &TextNode{Content: strconv.Itoa(v)})
-			}
-		case fmt.Stringer:
-			if !selfClosing {
-				element.Children = append(element.Children, &TextNode{Content: v.String()})
-			}
-		default:
-			if !selfClosing {
-				element.Children = append(element.Children, &TextNode{Content: fmt.Sprintf("%v", v)})
-			}
+	if b.Debug {
+		for i, arg := range args {
+			processArgWithRecovery(element, tag, selfClosing, i, arg)
 		}
+		return element
+	}
+
+	for _, arg := range args {
+		processArg(element, selfClosing, arg)
 	}
 
 	return element
+}
+
+// processArgWithRecovery wraps a single processArg call with panic
+// recovery, adding context before re-panicking. Only called from the
+// Debug-mode path in createElement -- the fast path calls processArg
+// directly, with no defer at all.
+func processArgWithRecovery(element *Element, tag string, selfClosing bool, index int, arg interface{}) {
+	defer func() {
+		if r := recover(); r != nil {
+			panic(&ElementConstructionError{
+				Tag:      tag,
+				ArgIndex: index,
+				ArgType:  fmt.Sprintf("%T", arg),
+				Original: r,
+				Stack:    debug.Stack(),
+			})
+		}
+	}()
+	processArg(element, selfClosing, arg)
+}
+
+// processArg handles a single createElement argument -- unwrapping
+// Evaluation, then dispatching by type. Shared by both the fast path and
+// the Debug-mode path so the actual dispatch logic exists exactly once.
+func processArg(element *Element, selfClosing bool, arg interface{}) {
+	for range 100 { // break out of infinite loops
+		if eval, ok := arg.(Evaluation); ok {
+			if eval.condition {
+				arg = eval.trueValue
+			} else {
+				arg = eval.falseValue
+			}
+			continue
+		}
+		break
+	}
+
+	if arg == nil {
+		return
+	}
+
+	switch v := arg.(type) {
+	case H:
+		panic("cannot use H type directly in element creation; call with (b *Builder)")
+	case Attribute:
+		v.Apply(element)
+	case Node:
+		if !selfClosing {
+			element.Children = append(element.Children, v)
+		}
+	case string:
+		if !selfClosing {
+			element.Children = append(element.Children, &TextNode{Content: v})
+		}
+	case int:
+		if !selfClosing {
+			element.Children = append(element.Children, &TextNode{Content: strconv.Itoa(v)})
+		}
+	case fmt.Stringer:
+		if !selfClosing {
+			element.Children = append(element.Children, &TextNode{Content: v.String()})
+		}
+	default:
+		if !selfClosing {
+			element.Children = append(element.Children, &TextNode{Content: fmt.Sprintf("%v", v)})
+		}
+	}
+}
+
+// Logic for creating HTML elements
+type Evaluation struct {
+	condition  bool
+	trueValue  any
+	falseValue any
+}
+
+// If returns the Node if the condition is true, otherwise returns nil.
+func (b *Builder) If(condition bool, item any) Evaluation {
+	return Evaluation{
+		condition: condition,
+		trueValue: item,
+	}
+}
+
+// IfElse returns the trueNode if condition is true, otherwise returns falseNode.
+func (b *Builder) IfElse(condition bool, trueNode, falseNode any) Evaluation {
+	return Evaluation{
+		condition:  condition,
+		trueValue:  trueNode,
+		falseValue: falseNode,
+	}
+}
+
+// TypedEvaluation is a type-safe, additive alternative to Evaluation for
+// conditional Attributes (github.com/mogsie, issue #14). It exists alongside
+// Evaluation/If/IfElse without changing either -- IfT/IfElseT are new
+// functions, not replacements.
+//
+// The problem: createElement's heterogeneous element builders (Div, P, etc.)
+// accept ...interface{}, so Evaluation (typed as `any`) flows through fine.
+// Self-closing elements (Input, Img, etc.) are deliberately homogeneous
+// (...Attribute only), and Evaluation doesn't satisfy Attribute, so
+// b.Input(b.If(cond, mi.Class("x"))) doesn't compile.
+//
+// TypedEvaluation[T Attribute] fixes this by implementing Apply directly, so
+// TypedEvaluation[Attribute] itself satisfies Attribute -- no wrapper
+// unwrapping needed. Nesting (IfElseT of an IfElseT) works for free: T can
+// itself be a TypedEvaluation[Attribute], and since that already satisfies
+// Attribute, the outer TypedEvaluation's own Apply delegates correctly
+// through arbitrary nesting depth via ordinary Go interface satisfaction --
+// no per-depth type-switch cases needed anywhere. Verified directly (three
+// levels of nesting, including a false-branch path through two nested
+// conditionals) before relying on this claim.
+//
+// Deliberately Attribute-only, not generic over Node too, despite an earlier
+// version of this design supporting both: giving one type unconditional
+// Render and Apply methods regardless of T means every instance satisfies
+// both Node and Attribute simultaneously, and createElement's switch always
+// picks whichever case it checks first -- silently dropping the other,
+// confirmed directly by a failing test (a TypedEvaluation[Node] passed to
+// Div rendered as an empty element, its child completely missing, no error
+// at any point). Constraining T to Attribute rules this out at compile
+// time rather than working around it at runtime; conditional Nodes for
+// heterogeneous elements already work fine via the existing, untouched
+// Evaluation/If/IfElse, so there's no real gap to fill there.
+type TypedEvaluation[T Attribute] struct {
+	condition  bool
+	trueValue  T
+	falseValue T
+	hasFalse   bool
+}
+
+// Apply implements Attribute, so TypedEvaluation[Attribute] (and any T that
+// is itself an Attribute, including a nested TypedEvaluation) can be passed
+// anywhere an Attribute is expected -- including to self-closing elements
+// like Input, which only accept ...Attribute.
+func (e TypedEvaluation[T]) Apply(el *Element) {
+	if e.condition {
+		e.trueValue.Apply(el)
+	} else if e.hasFalse {
+		e.falseValue.Apply(el)
+	}
+}
+
+// IfT returns item if condition is true, otherwise applies nothing --
+// type-safe sibling of (*Builder).If, usable anywhere T (typically Attribute
+// or Node) is expected, including with self-closing elements.
+//
+// Correctness note, not a hypothetical: whether "otherwise applies nothing"
+// is achieved by checking hasFalse explicitly, rather than checking
+// falseValue against T's zero value, matters in practice, not just in
+// theory. Confirmed directly: when T is inferred as a concrete struct type
+// (a user's own custom Attribute implementation, passed without an
+// explicit Attribute(...) conversion) rather than the Attribute interface
+// itself, T's zero value is a real, non-nil value of that struct -- not
+// nil -- so a zero-value comparison would have silently applied a
+// zero-valued attribute on the untaken branch instead of applying nothing,
+// with no error or panic to reveal it. hasFalse sidesteps this: it's set
+// explicitly by IfT/IfElseT and never depends on what T happens to be.
+func IfT[T Attribute](condition bool, item T) TypedEvaluation[T] {
+	return TypedEvaluation[T]{condition: condition, trueValue: item}
+}
+
+// IfElseT returns trueValue if condition is true, otherwise falseValue --
+// type-safe sibling of (*Builder).IfElse, usable anywhere T (typically
+// Attribute or Node) is expected, including with self-closing elements.
+func IfElseT[T Attribute](condition bool, trueValue, falseValue T) TypedEvaluation[T] {
+	return TypedEvaluation[T]{condition: condition, trueValue: trueValue, falseValue: falseValue, hasFalse: true}
 }
 
 // Document structure elements

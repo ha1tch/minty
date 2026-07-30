@@ -74,6 +74,100 @@ func TestAttributes(t *testing.T) {
 	}
 }
 
+// Logic test - If works
+func TestIf(t *testing.T) {
+	template := func(b *Builder) Node {
+		return b.Div(
+			b.If(false, Class("false")),
+			b.If(false, b.P("Condition is false")),
+			b.If(true, Class("true")),
+			b.If(true, b.P("Condition is true")),
+		)
+	}
+
+	var buf bytes.Buffer
+	Render(template, &buf)
+	html := buf.String()
+
+	if html != `<div class="true"><p>Condition is true</p></div>` {
+		t.Errorf("Conditionals should render content, got: %s", html)
+	}
+}
+
+func TestDeeplyNestedIf(t *testing.T) {
+	template := func(b *Builder) Node {
+		return b.Div(
+			b.If(false, b.If(false, Class("false-false-nested"))),
+			b.If(false, b.If(true, Class("false-true-nested"))),
+			b.If(false, b.If(false, b.P("False False"))),
+			b.If(false, b.If(true, b.P("False True"))),
+			b.If(true, b.If(false, Class("true-false-nested"))),
+			b.If(true, b.If(true, Class("true-true-nested"))),
+			b.If(true, b.If(false, b.P("True False"))),
+			b.If(true, b.If(true, b.P("True True"))),
+		)
+	}
+
+	var buf bytes.Buffer
+	Render(template, &buf)
+	html := buf.String()
+
+	if html != `<div class="true-true-nested"><p>True True</p></div>` {
+		t.Errorf("Conditionals should render content, got: %s", html)
+	}
+}
+
+func TestDeeplyNestedIfElse(t *testing.T) {
+	var booleans = []bool{true, false}
+	template := func(b *Builder) Node {
+		items := []interface{}{}
+		for _, outer := range booleans {
+			for _, inner := range booleans {
+				items = append(items,
+					b.IfElse(outer,
+						b.IfElse(inner,
+							Attr(fmt.Sprintf("outer-%v-inner-%v", outer, inner), "yep"),
+							Attr(fmt.Sprintf("outer-%v-inner-%v", outer, inner), "yep nope"),
+						),
+						b.IfElse(inner,
+							Attr(fmt.Sprintf("outer-%v-inner-%v", outer, inner), "nope yep"),
+							Attr(fmt.Sprintf("outer-%v-inner-%v", outer, inner), "nope nope"),
+						),
+					),
+				)
+			}
+		}
+		return b.Div(
+			items...,
+		)
+	}
+
+	var buf bytes.Buffer
+	Render(template, &buf)
+	html := buf.String()
+
+	var conditions = map[bool]map[bool]string{
+		true: {
+			true:  "yep",
+			false: "yep nope",
+		},
+		false: {
+			true:  "nope yep",
+			false: "nope nope",
+		},
+	}
+
+	for _, outer := range booleans {
+		for _, inner := range booleans {
+			expected := fmt.Sprintf(`outer-%v-inner-%v="%s"`, outer, inner, conditions[outer][inner])
+
+			if !strings.Contains(html, expected) {
+				t.Errorf("Expected attribute `%s` not found in output (was `%s`)", expected, html)
+			}
+		}
+	}
+}
+
 // Builder regression test - global instance works
 func TestGlobalBuilder(t *testing.T) {
 	template := func(b *Builder) Node {

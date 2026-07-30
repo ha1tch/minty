@@ -2,12 +2,6 @@
 
 **Minty is a fresh, ultra-concise, type-safe HTML generation library for Go web applications. It provides a fluent API for creating HTML components without traditional templates, offering compile-time safety and excellent IDE support.**
 
-## STATUS: PRELIMINAR, VERY BETA
-
-## DOCS: Completely out of sync, will be updating soon
-
-## EXAMPLES: The code examples are a sample of the best features that already work in minty's current incarnation. Ignore the docs for now.
-
 ## Features
 
 - **Type-safe HTML generation** - Catch errors at compile time, not runtime
@@ -18,6 +12,23 @@
 - **Domain libraries** - Pre-built components for common business domains
 - **Control flow helpers** - If, IfElse, Each, Map, Filter, and more
 - **Zero dependencies** - Pure Go, no external requirements
+
+## What's new in 0.2.0
+
+Type-safe conditional attributes (`IfT`/`IfElseT`), composite conditions
+in `mintydyn` (`allOf`/`anyOf`), a `Validate()` pre-flight check for
+config-level mistakes, `Builder.Debug` for informative panics, and two
+fixes from [@mogsie](https://github.com/mogsie) (deterministic attribute
+order; a clearer failure on a common mistake). The new conditional-
+attribute path also measures 10-15% faster than the equivalent existing
+API, and 4-5x faster than an earlier explored approach.
+
+Full details, measured performance data, and credits:
+**[What's New in 0.2.0](docs/minty-12-whats-new-0.2.0.md)**.
+
+If you're deciding how much to trust type safety here, or debugging
+something that compiled fine but behaved unexpectedly:
+**[Type Safety: What It Covers, and What It Doesn't](docs/minty-13-type-safety.md)**.
 
 ## Installation
 
@@ -61,6 +72,7 @@ github.com/ha1tch/minty
 ├── mintytypes/          # Pure business types (Money, Address, Status, etc.)
 ├── mintyex/             # Extensions (UI helpers, re-exports mintytypes)  
 ├── mintyui/             # UI component abstractions (Theme interface)
+├── mintydyn/            # Dynamic client-side components (states, data, rules)
 ├── domains/             # Business domain libraries (depend only on mintytypes)
 │   ├── mintyfin/        # Finance domain (accounts, transactions, invoices)
 │   ├── mintycart/       # E-commerce domain (products, carts, orders)
@@ -161,6 +173,16 @@ mi.Each(items, func(item Item) mi.H {
 })
 ```
 
+Type-safe conditional attributes, for self-closing elements that only
+accept `...Attribute` (like `Input`) -- see
+[What's New in 0.2.0](docs/minty-12-whats-new-0.2.0.md#type-safe-conditional-attributes-ift-and-ifelset)
+for nesting and the full story:
+
+```go
+b.Input(mi.IfT(maybe, mi.Class("highlighted")))
+b.Input(mi.IfElseT(isValid, mi.Class("valid"), mi.Class("invalid")))
+```
+
 ## Themes
 
 Use pre-built themes for consistent styling:
@@ -194,6 +216,8 @@ Comprehensive documentation is available in the `/docs` directory:
 9. [Themes](docs/minty-09-themes.md) - Theme system
 10. [Presentation Layer](docs/minty-10-presentation-layer.md) - UI patterns
 11. [JavaScript Integration](docs/minty-11-javascript-integration.md) - JS interop
+12. [What's New in 0.2.0](docs/minty-12-whats-new-0.2.0.md) - New APIs, measured performance, credits
+13. [Type Safety](docs/minty-13-type-safety.md) - What's covered, what isn't, and why
 
 ## Examples
 
@@ -215,6 +239,7 @@ All packages compile and tests pass.
 - Domain libraries (mintyfin, mintycart, mintymove)
 - Extensions (mintyex)
 - UI abstractions (mintyui)
+- Dynamic components (mintydyn) -- states, filterable data, dependency rules, including composite (allOf/anyOf) conditions
 - Presentation adapters (mintycartui, mintyfinui, mintymoveui)
 
 ## Standard Import Aliases
@@ -247,7 +272,7 @@ https://github.com/ha1tch/minty?tab=Apache-2.0-1-ov-file
 
 Copyright (C)2026 haitch
 
-h@ual.fi 
+h@ual.li 
 
 https://oldbytes.space/@haitchfive 
 

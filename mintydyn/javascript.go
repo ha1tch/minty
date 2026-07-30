@@ -58,7 +58,7 @@ func (db *DynamicBuilder[S, D, R]) generateJavaScript(pattern DetectedPattern) s
 	js.WriteString("\n</script>")
 
 	result := js.String()
-	
+
 	// Apply minification if enabled
 	if db.options.MinifyJS {
 		result = MinifyJS(result)
@@ -381,7 +381,67 @@ class DynamicComponent_%s {
         this.trigger('component:destroyed');
     }
 }
-`, db.id, jsID, db.id, db.id, db.id, db.id, jsID, jsID, jsID, jsID)
+
+// Shared condition-operator evaluator, used by both StatesManager
+// (evaluateCondition) and RulesManager (evaluateTriggerCondition) --
+// they're separate classes, so this is a standalone function rather than
+// a method, defined once here since generateBaseClass always runs
+// regardless of which managers a given component ends up with.
+// De-duplicates what were two near-identical switch statements (the
+// original evaluateCondition's five operators were a verbatim subset of
+// evaluateTriggerCondition's nine) into one shared implementation.
+function evaluateConditionOperator_%s(value, operator, expected) {
+    switch (operator) {
+        case 'equals': return value == expected;
+        case 'notEquals': return value != expected;
+        case 'contains': return String(value).includes(String(expected));
+        case 'greaterThan': return Number(value) > Number(expected);
+        case 'lessThan': return Number(value) < Number(expected);
+        case 'checked': return value === true;
+        case 'unchecked': return value === false;
+        case 'empty': return !value || value === '';
+        case 'notEmpty': return value && value !== '';
+        default:
+            console.warn('mintydyn: unrecognized condition operator', JSON.stringify(operator) + ' -- treating as false. Likely a typo (valid: equals, notEquals, contains, greaterThan, lessThan, checked, unchecked, empty, notEmpty).');
+            return false;
+    }
+}
+
+// Warns (does not throw -- these are all configuration mistakes that
+// still resolve to a defined, fail-safe result; a hard error would be a
+// worse experience for a mistake that's easy to make and easy to miss)
+// about composite-condition-tree shapes confirmed, by direct testing, to
+// be silent footguns otherwise:
+//   - allOf and anyOf both set on the same node: allOf wins silently,
+//     anyOf is ignored entirely.
+//   - a composite (allOf/anyOf) node that also carries leaf fields
+//     (field/component/componentId/operator/condition): the leaf fields
+//     are ignored entirely, silently.
+//   - an empty allOf array: JS's Array.prototype.every on an empty array
+//     is vacuously true, so this evaluates as "condition met" -- the
+//     opposite of what an empty condition list probably means to whoever
+//     configured it.
+//   - an empty anyOf array: vacuously false (Array.prototype.some), less
+//     surprising than the allOf case but included for the same reason.
+// Called from all three composite-tree entry points (StatesManager's
+// evaluateCondition, RulesManager's evaluateTriggerCondition and
+// evaluateTriggerConditionNode) rather than duplicated in each.
+function warnIfMalformedConditionNode_%s(node, context) {
+    if (node.allOf && node.anyOf) {
+        console.warn('mintydyn (' + context + '): a condition node has both allOf and anyOf set -- allOf wins, anyOf is ignored entirely.', node);
+    }
+    const hasLeafFields = node.field || node.component || node.componentId || node.operator || node.condition;
+    if ((node.allOf || node.anyOf) && hasLeafFields) {
+        console.warn('mintydyn (' + context + '): a condition node has both a composite (allOf/anyOf) and leaf fields set -- the leaf fields are ignored entirely.', node);
+    }
+    if (node.allOf && node.allOf.length === 0) {
+        console.warn('mintydyn (' + context + '): an allOf array is empty -- this evaluates as condition MET (vacuous AND), which is likely not what was intended.', node);
+    }
+    if (node.anyOf && node.anyOf.length === 0) {
+        console.warn('mintydyn (' + context + '): an anyOf array is empty -- this evaluates as condition NOT met (vacuous OR).', node);
+    }
+}
+`, db.id, jsID, db.id, db.id, db.id, db.id, jsID, jsID, jsID, jsID, jsID, jsID)
 }
 
 // =============================================================================
@@ -523,20 +583,25 @@ class StatesManager_%s {
         classString.split(' ').filter(c => c).forEach(c => element.classList.remove(c));
     }
     
+    // Handles both a plain leaf condition and a composite (allOf/anyOf)
+    // condition tree, nesting arbitrarily. A leaf's value is always read
+    // fresh from the DOM (unchanged from the original, non-composite
+    // behaviour) since StateCondition never received a passed-in value to
+    // begin with.
     evaluateCondition(condition) {
+        warnIfMalformedConditionNode_%s(condition, 'StatesManager.evaluateCondition');
+        if (condition.allOf) {
+            return condition.allOf.every(c => this.evaluateCondition(c));
+        }
+        if (condition.anyOf) {
+            return condition.anyOf.some(c => this.evaluateCondition(c));
+        }
+
         const element = document.getElementById(condition.component || condition.field);
         if (!element) return false;
-        
+
         const value = this.component.getInputValue(element);
-        
-        switch (condition.operator) {
-            case 'equals': return value == condition.value;
-            case 'notEquals': return value != condition.value;
-            case 'contains': return String(value).includes(String(condition.value));
-            case 'greaterThan': return Number(value) > Number(condition.value);
-            case 'lessThan': return Number(value) < Number(condition.value);
-            default: return false;
-        }
+        return evaluateConditionOperator_%s(value, condition.operator, condition.value);
     }
     
     getActiveState() {
@@ -551,7 +616,7 @@ class StatesManager_%s {
         return this.states.find(s => s.id === stateId);
     }
 }
-`, jsID)
+`, jsID, jsID, jsID)
 }
 
 // =============================================================================
@@ -918,14 +983,41 @@ class RulesManager_%s {
         // Sort by priority
         this.rules.sort((a, b) => (b.priority || 0) - (a.priority || 0));
         
-        // Index by trigger component
+        // Index by every trigger component referenced anywhere in the
+        // rule's condition tree -- a composite (allOf/anyOf) rule must
+        // re-evaluate whenever any of its referenced components change,
+        // not just a single top-level one. For a plain, non-composite
+        // trigger this collects exactly the one componentId, matching the
+        // original behaviour unchanged.
         this.rules.forEach(rule => {
-            const triggerId = rule.trigger.componentId;
-            if (!this.activeRules.has(triggerId)) {
-                this.activeRules.set(triggerId, []);
+            const triggerIds = [];
+            this.collectTriggerComponentIds(rule.trigger, triggerIds);
+            if (triggerIds.length === 0) {
+                console.warn('mintydyn: rule', JSON.stringify(rule.id), 'references no componentId anywhere in its trigger condition -- it will never be registered against any trigger and can never fire.', rule);
             }
-            this.activeRules.get(triggerId).push(rule);
+            triggerIds.forEach(triggerId => {
+                if (!this.activeRules.has(triggerId)) {
+                    this.activeRules.set(triggerId, []);
+                }
+                this.activeRules.get(triggerId).push(rule);
+            });
         });
+    }
+    
+    // Recursively walks a TriggerCondition tree, collecting every
+    // componentId referenced at any leaf into out.
+    collectTriggerComponentIds(node, out) {
+        if (node.allOf) {
+            node.allOf.forEach(c => this.collectTriggerComponentIds(c, out));
+            return;
+        }
+        if (node.anyOf) {
+            node.anyOf.forEach(c => this.collectTriggerComponentIds(c, out));
+            return;
+        }
+        if (node.componentId) {
+            out.push(node.componentId);
+        }
     }
     
     bindRuleEvents() {
@@ -1001,19 +1093,41 @@ class RulesManager_%s {
         });
     }
     
+    // The top-level leaf case is unchanged from the original: it uses the
+    // value passed in from the event that fired, never reading the DOM
+    // itself. A composite (allOf/anyOf) delegates to
+    // evaluateTriggerConditionNode for every sub-condition instead, since
+    // those aren't necessarily the element that fired -- their values are
+    // read fresh from the DOM by componentId.
     evaluateTriggerCondition(trigger, value) {
-        switch (trigger.condition) {
-            case 'equals': return value == trigger.value;
-            case 'notEquals': return value != trigger.value;
-            case 'contains': return String(value).includes(String(trigger.value));
-            case 'greaterThan': return Number(value) > Number(trigger.value);
-            case 'lessThan': return Number(value) < Number(trigger.value);
-            case 'checked': return value === true;
-            case 'unchecked': return value === false;
-            case 'empty': return !value || value === '';
-            case 'notEmpty': return value && value !== '';
-            default: return false;
+        warnIfMalformedConditionNode_%s(trigger, 'RulesManager.evaluateTriggerCondition');
+        if (trigger.allOf) {
+            return trigger.allOf.every(c => this.evaluateTriggerConditionNode(c));
         }
+        if (trigger.anyOf) {
+            return trigger.anyOf.some(c => this.evaluateTriggerConditionNode(c));
+        }
+        return evaluateConditionOperator_%s(value, trigger.condition, trigger.value);
+    }
+    
+    // Evaluates a single node within a composite TriggerCondition tree,
+    // recursing through further nesting and reading each leaf's current
+    // value fresh from the DOM by componentId -- unlike the top-level
+    // leaf case, a composite sub-condition has no passed-in value to use,
+    // since it isn't necessarily the component that fired the event being
+    // evaluated.
+    evaluateTriggerConditionNode(node) {
+        warnIfMalformedConditionNode_%s(node, 'RulesManager.evaluateTriggerConditionNode');
+        if (node.allOf) {
+            return node.allOf.every(c => this.evaluateTriggerConditionNode(c));
+        }
+        if (node.anyOf) {
+            return node.anyOf.some(c => this.evaluateTriggerConditionNode(c));
+        }
+        const element = document.getElementById(node.componentId);
+        if (!element) return false;
+        const value = this.component.getInputValue(element);
+        return evaluateConditionOperator_%s(value, node.condition, node.value);
     }
     
     executeRuleActions(rule) {
@@ -1086,7 +1200,7 @@ class RulesManager_%s {
         this.ruleHistory = [];
     }
 }
-`, jsID)
+`, jsID, jsID, jsID, jsID, jsID)
 }
 
 // =============================================================================

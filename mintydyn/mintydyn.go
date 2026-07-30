@@ -57,11 +57,22 @@ type ComponentState struct {
 }
 
 // StateCondition defines when a state should be available or visible.
+//
+// AllOf/AnyOf make this a composite condition tree: when either is set,
+// Field/Operator/Value/Component on this node are ignored and every entry
+// in AllOf must be true (AND) or at least one entry in AnyOf must be true
+// (OR) instead. Composites nest arbitrarily -- an AllOf entry can itself
+// have its own AllOf/AnyOf. Every existing StateCondition{Field: ...} value
+// is a valid leaf under this shape, so this is purely additive: no current
+// caller or serialized config changes meaning.
 type StateCondition struct {
 	Field     string      `json:"field"`
 	Operator  string      `json:"operator"` // equals, notEquals, contains, greaterThan, lessThan
 	Value     interface{} `json:"value"`
 	Component string      `json:"component,omitempty"` // External component reference
+
+	AllOf []StateCondition `json:"allOf,omitempty"`
+	AnyOf []StateCondition `json:"anyOf,omitempty"`
 }
 
 // ComponentStateCollection provides rich state management with transitions.
@@ -86,18 +97,31 @@ type DependencyRule struct {
 }
 
 // TriggerCondition specifies when a rule should fire.
+//
+// AllOf/AnyOf make this a composite condition tree: when either is set,
+// ComponentID/Condition/Value on this node are ignored and every entry in
+// AllOf must be true (AND) or at least one entry in AnyOf must be true (OR)
+// instead. Composites nest arbitrarily. Event/Debounce stay meaningful on
+// the top-level rule regardless of whether Trigger is a leaf or a
+// composite, since they govern when re-evaluation happens, not what's
+// evaluated. Every existing TriggerCondition{ComponentID: ...} value is a
+// valid leaf under this shape, so this is purely additive: no current
+// caller or serialized config changes meaning.
 type TriggerCondition struct {
 	ComponentID string      `json:"componentId"`
-	Event       string      `json:"event"`                 // change, click, focus, blur
-	Condition   string      `json:"condition"`             // equals, notEquals, contains, greaterThan, lessThan, checked, unchecked, empty, notEmpty
+	Event       string      `json:"event"`     // change, click, focus, blur
+	Condition   string      `json:"condition"` // equals, notEquals, contains, greaterThan, lessThan, checked, unchecked, empty, notEmpty
 	Value       interface{} `json:"value"`
-	Debounce    int         `json:"debounce,omitempty"`    // Milliseconds
+	Debounce    int         `json:"debounce,omitempty"` // Milliseconds
+
+	AllOf []TriggerCondition `json:"allOf,omitempty"`
+	AnyOf []TriggerCondition `json:"anyOf,omitempty"`
 }
 
 // DependencyAction specifies what happens when a rule fires.
 type DependencyAction struct {
 	TargetID  string      `json:"targetId"`
-	Action    string      `json:"action"`              // show, hide, enable, disable, addClass, removeClass, setValue, setText, setHTML, focus, blur
+	Action    string      `json:"action"` // show, hide, enable, disable, addClass, removeClass, setValue, setText, setHTML, focus, blur
 	Value     interface{} `json:"value,omitempty"`
 	Condition string      `json:"condition,omitempty"` // Additional condition for action
 }
@@ -105,7 +129,7 @@ type DependencyAction struct {
 // RuleCollection provides rich rule management with grouping.
 type RuleCollection struct {
 	Rules      []DependencyRule       `json:"rules"`
-	Groups     map[string][]string    `json:"groups,omitempty"`     // Rule groupings
+	Groups     map[string][]string    `json:"groups,omitempty"` // Rule groupings
 	Priorities map[string]int         `json:"priorities,omitempty"`
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }
@@ -138,8 +162,8 @@ type FilterableField struct {
 	Name         string      `json:"name"`
 	Type         string      `json:"type"` // text, range, multiselect, boolean, select
 	Label        string      `json:"label"`
-	Options      []string    `json:"options,omitempty"`      // For select/multiselect
-	Range        *RangeInfo  `json:"range,omitempty"`        // For range type
+	Options      []string    `json:"options,omitempty"` // For select/multiselect
+	Range        *RangeInfo  `json:"range,omitempty"`   // For range type
 	Searchable   bool        `json:"searchable,omitempty"`
 	DefaultValue interface{} `json:"defaultValue,omitempty"`
 }
@@ -157,10 +181,10 @@ type FilterOptions struct {
 	EnableSort       bool   `json:"enableSort"`
 	ItemsPerPage     int    `json:"itemsPerPage"`
 	EnablePagination bool   `json:"enablePagination"`
-	ClientSide       bool   `json:"clientSide"` // Force client-side even for large datasets
-	ServerRendered   bool   `json:"serverRendered"` // Data is pre-rendered in HTML, just show/hide
-	RowSelector      string `json:"rowSelector"`    // CSS selector for data rows (e.g., ".asset-row")
-	CounterSelector  string `json:"counterSelector"` // CSS selector for count display (e.g., "#asset-count")
+	ClientSide       bool   `json:"clientSide"`             // Force client-side even for large datasets
+	ServerRendered   bool   `json:"serverRendered"`         // Data is pre-rendered in HTML, just show/hide
+	RowSelector      string `json:"rowSelector"`            // CSS selector for data rows (e.g., ".asset-row")
+	CounterSelector  string `json:"counterSelector"`        // CSS selector for count display (e.g., "#asset-count")
 	ItemTemplate     string `json:"itemTemplate,omitempty"` // JS template for rendering items (uses ${field} syntax)
 }
 
@@ -236,17 +260,17 @@ type DetectedPattern struct {
 
 // Pattern constants
 const (
-	PatternEmpty            = "empty"
+	PatternEmpty             = "empty"
 	PatternPreRenderedStates = "pre-rendered-states"
-	PatternDynamicStates    = "dynamic-states"
-	PatternClientFilterable = "client-filterable"
-	PatternServerFilterable = "server-filterable"
-	PatternDependencyOnly   = "dependency-only"
-	PatternStatefulData     = "stateful-data"
-	PatternFilterableStates = "filterable-states"
-	PatternDependentStates  = "dependent-states"
-	PatternDependentData    = "dependent-data"
-	PatternComplete         = "complete"
+	PatternDynamicStates     = "dynamic-states"
+	PatternClientFilterable  = "client-filterable"
+	PatternServerFilterable  = "server-filterable"
+	PatternDependencyOnly    = "dependency-only"
+	PatternStatefulData      = "stateful-data"
+	PatternFilterableStates  = "filterable-states"
+	PatternDependentStates   = "dependent-states"
+	PatternDependentData     = "dependent-data"
+	PatternComplete          = "complete"
 )
 
 // =============================================================================
