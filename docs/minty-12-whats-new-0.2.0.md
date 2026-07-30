@@ -1,30 +1,69 @@
 # Minty Documentation - Part 12
-## What's New in 0.2.0
+## What's New in 0.2.0 and 0.2.1
 
 > **Part of the Minty System**: This document covers everything new in
 > the 0.2.0 release -- new APIs, fixed bugs (including one that shipped
 > unnoticed since the original conditional-attributes work), measured
 > performance data, and credit for the community contributions this
-> release incorporates. All numbers in this document were measured
-> directly on this codebase, not estimated -- see each section for how
-> to reproduce them yourself.
+> release incorporates -- plus 0.2.1's addition below. All numbers in
+> this document were measured directly on this codebase, not estimated
+> -- see each section for how to reproduce them yourself.
 
 ---
 
 ### Table of Contents
-1. [Summary](#summary)
-2. [Type-safe conditional attributes: IfT and IfElseT](#type-safe-conditional-attributes-ift-and-ifelset)
-3. [Performance](#performance)
-4. [Composite conditions in mintydyn](#composite-conditions-in-mintydyn)
-5. [Validate and ValidateWithHandler](#validate-and-validatewithhandler)
-6. [Builder.Debug and ElementConstructionError](#builderdebug-and-elementconstructionerror)
-7. [Deterministic attribute rendering order](#deterministic-attribute-rendering-order)
-8. [Clearer failure on a common mistake](#clearer-failure-on-a-common-mistake)
-9. [Credits](#credits)
+1. [0.2.1: in / notIn list-membership operators](#021-in--notin-list-membership-operators)
+2. [Summary (0.2.0)](#summary)
+3. [Type-safe conditional attributes: IfT and IfElseT](#type-safe-conditional-attributes-ift-and-ifelset)
+4. [Performance](#performance)
+5. [Composite conditions in mintydyn](#composite-conditions-in-mintydyn)
+6. [Validate and ValidateWithHandler](#validate-and-validatewithhandler)
+7. [Builder.Debug and ElementConstructionError](#builderdebug-and-elementconstructionerror)
+8. [Deterministic attribute rendering order](#deterministic-attribute-rendering-order)
+9. [Clearer failure on a common mistake](#clearer-failure-on-a-common-mistake)
+10. [Credits](#credits)
 
 ---
 
-## Summary
+## 0.2.1: in / notIn list-membership operators
+
+Added while scoping a migration of a downstream consumer's own,
+independently-built condition evaluator onto `mintydyn`'s composite
+conditions (0.2.0). That evaluator's operator set included list
+membership (`in`/`not_in`), which `mintydyn`'s original nine operators
+didn't have at all -- a real gap, not just a naming difference, since
+nothing in 0.2.0 could express "is this field's value one of these N
+values" at all.
+
+```go
+mintydyn.TriggerCondition{
+    ComponentID: "country",
+    Condition:   "in", // or "notIn"
+    Value:       []interface{}{"US", "CA", "MX"},
+}
+```
+
+`Value` must be an array; each element is compared with loose equality
+(`==` in the generated JS), matching every other operator -- `"5"`
+matches `5`, not just `"5"` matches `"5"`.
+
+**Fail-safe behavior on malformed input is deliberately preserved, not
+"corrected"**: since this was built specifically to be a safe target for
+migrating an existing evaluator's callers onto, matching that
+evaluator's exact behavior mattered more than what might otherwise seem
+like the more consistent choice. A non-array `Value` for `in` evaluates
+`false`. The same non-array `Value` for `notIn` evaluates `true` --
+negating "not a member of a list" when there is no valid list at all.
+This asymmetry is intentional, verified directly against the evaluator
+it was designed to match, not an oversight.
+
+`knownOperators` and `isKnownOperator` (used by `Validate`) are updated
+accordingly -- both operators validate cleanly, and `Issue.Valid` for an
+unrecognized-operator issue now lists all 11 operators, not 9.
+
+---
+
+## Summary (0.2.0)
 
 | Change | Kind | Breaking? |
 |---|---|---|

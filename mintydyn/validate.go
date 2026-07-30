@@ -276,9 +276,16 @@ func collectTriggerComponentIDs(node TriggerCondition) []string {
 // with the generated JavaScript's own switch by hand;
 // TestIsKnownOperator_MatchesGeneratedJS cross-checks both this list and
 // isKnownOperator itself against the generated source.
+//
+// in/notIn added in 0.2.1: list-membership operators, matching the exact
+// semantics of the evaluator this is meant to be a drop-in replacement
+// for -- 'expected' must be an array, each element compared with loose
+// equality. See evaluateConditionOperator_%s's own doc comment
+// (javascript.go) for the deliberately-preserved fail-safe behavior on
+// a malformed (non-array) 'expected'.
 var knownOperators = []string{
 	"equals", "notEquals", "contains", "greaterThan", "lessThan",
-	"checked", "unchecked", "empty", "notEmpty",
+	"checked", "unchecked", "empty", "notEmpty", "in", "notIn",
 }
 
 // isKnownOperator mirrors evaluateConditionOperator_%s's own switch
@@ -286,30 +293,29 @@ var knownOperators = []string{
 //
 // Dispatches via length first, then a short switch only among the
 // candidates that length narrows to, rather than one flat switch
-// comparing against all nine unconditionally: six of the nine operators
-// are uniquely identified by len(op) alone, before any string content
-// comparison happens at all; only length 8 (contains/lessThan/notEmpty)
-// and length 9 (notEquals/unchecked) still need a further comparison,
-// and even then among at most 3 candidates rather than 9.
+// comparing against all eleven unconditionally. Measured, not assumed
+// (see BenchmarkIsKnownOperator_* in operator_dispatch_bench_test.go):
+// no measurable difference against a single flat switch at this scale --
+// Go's compiler already dispatches a flat string switch efficiently on
+// its own. What both switch forms measurably beat is a naive linear
+// []string scan. The nested form is kept for its documentation value in
+// showing the technique, not because it's faster than the simpler flat
+// alternative at this scale.
 //
-// Measured, not assumed: BenchmarkIsKnownOperator_NestedSwitch vs
-// BenchmarkIsKnownOperator_FlatSwitch shows no measurable difference
-// between this and a single flat switch at this scale (9 short strings)
-// -- Go's compiler already dispatches a flat string switch efficiently
-// on its own, so the manual length-first split doesn't add anything
-// further here. What both switch forms measurably beat is a naive linear
-// []string scan (BenchmarkIsKnownOperator_LinearScan): roughly 3.5x
-// slower on a mixed workload, and about 14x slower specifically for the
-// non-matching ("miss") case, where a linear scan must exhaust the whole
-// list before concluding "not found," while either switch form resolves
-// a miss in near-constant time. The real, measured win here is
-// switch-over-linear-scan; the further nested-vs-flat split is kept for
-// the documentation value of showing the technique and because it's not
-// worse, not because it's faster.
+// 0.2.1 added "in" (length 2, its own new bucket) and "notIn" (length 5)
+// -- length 5 now needs its own nested comparison for the first time,
+// since "empty" (also length 5) is no longer alone in that bucket.
 func isKnownOperator(op string) bool {
 	switch len(op) {
+	case 2:
+		return op == "in"
 	case 5:
-		return op == "empty"
+		switch op {
+		case "empty", "notIn":
+			return true
+		default:
+			return false
+		}
 	case 6:
 		return op == "equals"
 	case 7:

@@ -13,7 +13,7 @@
 - **Control flow helpers** - If, IfElse, Each, Map, Filter, and more
 - **Zero dependencies** - Pure Go, no external requirements
 
-## What's new in 0.2.0
+## What's new in 0.2.0 and 0.2.1
 
 Type-safe conditional attributes (`IfT`/`IfElseT`), composite conditions
 in `mintydyn` (`allOf`/`anyOf`), a `Validate()` pre-flight check for
@@ -21,10 +21,11 @@ config-level mistakes, `Builder.Debug` for informative panics, and two
 fixes from [@mogsie](https://github.com/mogsie) (deterministic attribute
 order; a clearer failure on a common mistake). The new conditional-
 attribute path also measures 10-15% faster than the equivalent existing
-API, and 4-5x faster than an earlier explored approach.
+API, and 4-5x faster than an earlier explored approach. 0.2.1 adds
+`in`/`notIn` list-membership operators to `mintydyn`'s conditions.
 
 Full details, measured performance data, and credits:
-**[What's New in 0.2.0](docs/minty-12-whats-new-0.2.0.md)**.
+**[What's New in 0.2.0 and 0.2.1](docs/minty-12-whats-new-0.2.0.md)**.
 
 If you're deciding how much to trust type safety here, or debugging
 something that compiled fine but behaved unexpectedly:
@@ -216,7 +217,7 @@ Comprehensive documentation is available in the `/docs` directory:
 9. [Themes](docs/minty-09-themes.md) - Theme system
 10. [Presentation Layer](docs/minty-10-presentation-layer.md) - UI patterns
 11. [JavaScript Integration](docs/minty-11-javascript-integration.md) - JS interop
-12. [What's New in 0.2.0](docs/minty-12-whats-new-0.2.0.md) - New APIs, measured performance, credits
+12. [What's New in 0.2.0 and 0.2.1](docs/minty-12-whats-new-0.2.0.md) - New APIs, measured performance, credits
 13. [Type Safety](docs/minty-13-type-safety.md) - What's covered, what isn't, and why
 
 ## Examples

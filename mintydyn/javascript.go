@@ -401,8 +401,22 @@ function evaluateConditionOperator_%s(value, operator, expected) {
         case 'unchecked': return value === false;
         case 'empty': return !value || value === '';
         case 'notEmpty': return value && value !== '';
+        // List-membership operators added in 0.2.1: 'expected' must be
+        // an array; each element is compared with '==' (loose equality,
+        // matching every other operator above -- '5' matches 5, not
+        // just '5' matches '5'). A malformed (non-array) 'expected' for
+        // 'in' evaluates false; the same malformed 'expected' for
+        // 'notIn' evaluates true (negating "not in the list" when there
+        // is no valid list at all) -- both deliberately, not
+        // accidentally: this matches the exact fail-safe behavior of
+        // the evaluator this was designed to be a drop-in replacement
+        // for, not a "corrected" version of it.
+        case 'in':
+            return Array.isArray(expected) && expected.some(item => item == value);
+        case 'notIn':
+            return !(Array.isArray(expected) && expected.some(item => item == value));
         default:
-            console.warn('mintydyn: unrecognized condition operator', JSON.stringify(operator) + ' -- treating as false. Likely a typo (valid: equals, notEquals, contains, greaterThan, lessThan, checked, unchecked, empty, notEmpty).');
+            console.warn('mintydyn: unrecognized condition operator', JSON.stringify(operator) + ' -- treating as false. Likely a typo (valid: equals, notEquals, contains, greaterThan, lessThan, checked, unchecked, empty, notEmpty, in, notIn).');
             return false;
     }
 }

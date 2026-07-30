@@ -216,7 +216,7 @@ func TestValidateWithHandler_PassesValueAndValidList(t *testing.T) {
 	if got.Value != "eqauls" {
 		t.Errorf("expected Value %q, got %q", "eqauls", got.Value)
 	}
-	if len(got.Valid) != 9 {
+	if len(got.Valid) != 11 {
 		t.Fatalf("expected 9 valid operators, got %d: %v", len(got.Valid), got.Valid)
 	}
 	found := false

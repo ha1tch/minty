@@ -100,7 +100,7 @@ constraint on a *value*, not a *type*:
   vacuously false.
 - An unrecognized operator string like `"eqauls"` (a typo for `"equals"`)
   is a perfectly valid `string` -- Go has no way to constrain a field to
-  one of nine specific string values at the type level without a
+  one of eleven specific string values at the type level without a
   hand-rolled enum type, and even then, JSON unmarshaling into a plain
   `string` field accepts anything.
 - `AllOf` and `AnyOf` both being set on the same node is two independently
@@ -114,7 +114,7 @@ constraint on a *value*, not a *type*:
   never be registered against any trigger and can never fire.
 
 There is no dependent-type or refinement-type mechanism in Go to express
-"this slice must be non-empty," "this string must be one of these nine
+"this slice must be non-empty," "this string must be one of these eleven
 values," or "these two fields are mutually exclusive" as a *type*
 constraint. These are all constraints on the *value* a well-typed field
 happens to hold, which Go's type system has no vocabulary for at all --

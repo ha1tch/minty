@@ -207,3 +207,77 @@ func mustContain(t *testing.T, haystack, needle string) {
 		t.Errorf("expected generated JS to contain %q, not found", needle)
 	}
 }
+
+// =============================================================================
+// 0.2.1: in / notIn list-membership operators
+// =============================================================================
+//
+// Added to close a real gap found while scoping a migration of Seam's own,
+// independently-built condition evaluator onto mintydyn: Seam's operator
+// set includes in/not_in (list membership), which mintydyn's original
+// nine operators didn't have at all. Deliberately matches the exact
+// semantics of the evaluator this is meant to be a drop-in replacement
+// for, including its fail-safe behavior on malformed input -- verified
+// directly with a Node.js harness during development (documented here in
+// the tests below structurally, since this repo's test suite stays
+// dependency-free, matching every other generated-JS test in this file).
+
+func TestGeneratedJS_InNotInOperatorsPresent(t *testing.T) {
+	js := generatedJS(t)
+	mustContain(t, js, "case 'in':")
+	mustContain(t, js, "case 'notIn':")
+	mustContain(t, js, "Array.isArray(expected)")
+}
+
+func TestIsKnownOperator_InNotInRecognized(t *testing.T) {
+	if !isKnownOperator("in") {
+		t.Error("expected isKnownOperator to recognize \"in\"")
+	}
+	if !isKnownOperator("notIn") {
+		t.Error("expected isKnownOperator to recognize \"notIn\"")
+	}
+	// Confirms the length-5 bucket correctly distinguishes notIn from
+	// empty (the pre-existing length-5 operator), not just accepting
+	// anything of that length.
+	if isKnownOperator("notin") {
+		t.Error("isKnownOperator should be case-sensitive: \"notin\" (lowercase i) is not a valid operator")
+	}
+}
+
+func TestValidate_InOperatorAcceptedAsKnown(t *testing.T) {
+	db := New[[]ComponentState, []map[string]interface{}, []DependencyRule]("test").
+		WithRules([]DependencyRule{
+			{ID: "r1", Trigger: TriggerCondition{ComponentID: "country", Condition: "in", Value: []interface{}{"US", "CA"}}},
+		})
+	if err := db.Validate(); err != nil {
+		t.Errorf("expected \"in\" to validate cleanly as a known operator, got: %v", err)
+	}
+}
+
+func TestValidate_NotInOperatorAcceptedAsKnown(t *testing.T) {
+	db := New[[]ComponentState, []map[string]interface{}, []DependencyRule]("test").
+		WithRules([]DependencyRule{
+			{ID: "r1", Trigger: TriggerCondition{ComponentID: "country", Condition: "notIn", Value: []interface{}{"US", "CA"}}},
+		})
+	if err := db.Validate(); err != nil {
+		t.Errorf("expected \"notIn\" to validate cleanly as a known operator, got: %v", err)
+	}
+}
+
+func TestKnownOperators_HasElevenEntriesIncludingInNotIn(t *testing.T) {
+	if len(knownOperators) != 11 {
+		t.Fatalf("expected 11 known operators after adding in/notIn, got %d: %v", len(knownOperators), knownOperators)
+	}
+	hasIn, hasNotIn := false, false
+	for _, op := range knownOperators {
+		if op == "in" {
+			hasIn = true
+		}
+		if op == "notIn" {
+			hasNotIn = true
+		}
+	}
+	if !hasIn || !hasNotIn {
+		t.Errorf("expected both \"in\" and \"notIn\" in knownOperators, got: %v", knownOperators)
+	}
+}
